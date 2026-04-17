@@ -1,0 +1,117 @@
+/**
+ *  @file nodeTypeMap.h
+ *  Contributors history:
+ *  @author Marco Aurelio Ferrari (e.marcoferrari@utfpr.edu.br)
+ *  @brief Define lattice types
+ *  @version 0.1.0
+ *  @date 01/09/2025
+ */
+
+
+#ifndef __NODE_TYPE_MAP_H
+#define __NODE_TYPE_MAP_H
+
+#include <builtin_types.h>
+#include <stdint.h>
+
+
+// DIRECTION DEFINES 00000000
+
+#define BULK                  (0b00000000000000000000000000000000)
+//FACE
+#define NORTH                 (0b00000000000000000000000011001100) //y=NY 
+#define SOUTH                 (0b00000000000000000000000000110011) //y=0
+#define WEST                  (0b00000000000000000000000001010101)  //x=0
+#define EAST                  (0b00000000000000000000000010101010)  //x=NX
+#define FRONT                 (0b00000000000000000000000011110000) //z=NZ
+#define BACK                  (0b00000000000000000000000000001111)  //z=0
+//EDGE
+#define NORTH_WEST            (0b00000000000000000000000011011101)
+#define NORTH_EAST            (0b00000000000000000000000011101110)
+#define NORTH_FRONT           (0b00000000000000000000000011111100)
+#define NORTH_BACK            (0b00000000000000000000000011001111)
+#define SOUTH_WEST            (0b00000000000000000000000001110111)
+#define SOUTH_EAST            (0b00000000000000000000000010111011)
+#define SOUTH_FRONT           (0b00000000000000000000000011110011)
+#define SOUTH_BACK            (0b00000000000000000000000000111111)
+#define WEST_FRONT            (0b00000000000000000000000011110101)
+#define WEST_BACK             (0b00000000000000000000000001011111)
+#define EAST_FRONT            (0b00000000000000000000000011111010)
+#define EAST_BACK             (0b00000000000000000000000010101111)
+//CORNER
+#define NORTH_WEST_FRONT      (0b00000000000000000000000011111101)
+#define NORTH_WEST_BACK       (0b00000000000000000000000011011111)
+#define NORTH_EAST_FRONT      (0b00000000000000000000000011111110)
+#define NORTH_EAST_BACK       (0b00000000000000000000000011101111)
+#define SOUTH_WEST_FRONT      (0b00000000000000000000000011110111)
+#define SOUTH_WEST_BACK       (0b00000000000000000000000001111111)
+#define SOUTH_EAST_FRONT      (0b00000000000000000000000011111011)
+#define SOUTH_EAST_BACK       (0b00000000000000000000000010111111)
+
+#define SOLID_NODE            (0b00000000000000000000000011111111)
+                                
+
+#define BC_ZERO_VELOCITY_WALL (0b00000000000000000000000000000000) 
+#define BC_VELOCITY_WALL      (0b00000000000000000000000100000000)
+#define BC_OUTFLOW            (0b00000000000000000000001000000000)
+#define BC_SYMMETRY           (0b00000000000000000000001100000000)
+#define BC_FREESLIP           (0b00000000000000000000010000000000)
+#define BC_CURVED_BC_CONCAV   (0b00000000000000000000010100000000)
+#define BC_CURVED_BC_CONVEX   (0b00000000000000000000011000000000)
+#define BC_EMPTY_ONE          (0b00000000000000000000011100000000)
+#define BC_VELOCITY_INDEX_0   (0b00000000000000000000000000000000)
+#define BC_VELOCITY_INDEX_1   (0b00000000000000000000100000000000)
+#define BC_VELOCITY_INDEX_2   (0b00000000000000000001000000000000)
+#define BC_VELOCITY_INDEX_3   (0b00000000000000000001100000000000)
+
+//    ffffffff'fffffeee'dddccbbb'aaaaaaaa
+// (0b00000000'00000000'00000000'00000000) 
+// a - nearby solid nodes (0 = fluid node, 255 = solid node)
+// b - boundary condition type
+//      000 - solid wall
+//      001 - fixed velocity (use index of ml for the velocities)
+//      010 - outflow boundary condition (use index of ml for the pressure )
+//      011 - symetry bondary condition
+//      100 - free-slip boundary condition
+//      101 - curved boundary convave (inside a duct)
+//      110 - curved boundary convex (outside of a duct)
+//      111 - EMPTY
+// c - velocity index (00,01,10,11)
+// d - second pop boundary condition type
+//      000 - EMPTY
+//      001 - EMPTY
+//      010 - EMPTY
+//      011 - EMPTY
+//      100 - EMPTY
+//      101 - EMPTY
+//      111 - EMPTY
+// e - thermal index (00,01,10,11)
+// f- boundary tracking index ( up to 8192 different ids)
+
+
+#define MISSING_DEFINITION   (0b11111111111111111111111111111111)
+
+
+#define DIRECTION_BITS (0b11111 << DIRECTION_OFFSET)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#endif // !__NODE_TYPE_MAP_H

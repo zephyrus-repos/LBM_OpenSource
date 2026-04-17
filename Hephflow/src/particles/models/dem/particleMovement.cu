@@ -1,0 +1,310 @@
+
+
+//functions related to the rigid body body of the particle and discretization
+
+#include "particleMovement.cuh"
+
+#ifdef PARTICLE_MODEL
+__global__
+void updateParticleOldValues(
+    ParticleCenter *pArray,
+    unsigned int step)
+{
+    unsigned int localIdx = threadIdx.x + blockDim.x * blockIdx.x;
+    int globalIdx = localIdx;
+
+    if (globalIdx >= NUM_PARTICLES) {
+        return;
+    }
+
+    if (pArray == nullptr) {
+        printf("ERROR: particles is nullptr\n");
+        return;
+    }
+
+
+    ParticleCenter* pc_i = &pArray[globalIdx];
+
+    // Internal linear momentum delta = rho*volume*delta(v)/delta(t)
+    // https://doi.org/10.1016/j.compfluid.2011.05.011
+    //pc_i->setDPInternalX(RHO_0 * pc_i->getVolume() * (pc_i->getVelX() - pc_i->getVelOldX())); //;
+    //pc_i->setDPInternalY(RHO_0 * pc_i->getVolume() * (pc_i->getVelY() - pc_i->getVelOldY())); //;
+    //pc_i->setDPInternalZ(RHO_0 * pc_i->getVolume() * (pc_i->getVelZ() - pc_i->getVelOldZ())); //;
+    pc_i->setDPInternalX(0.0);
+    pc_i->setDPInternalY(0.0);
+    pc_i->setDPInternalZ(0.0);
+
+    // Internal angular momentum delta = (rho_f/rho_p)*I*delta(omega)/delta(t)
+    // https://doi.org/10.1016/j.compfluid.2011.05.011
+    
+    //pc_i->setDLInternalX((RHO_0 / pc_i->getDensity()) * pc_i->getIXX() * (pc_i->getWX() - pc_i->getWOldX())); 
+    //pc_i->setDLInternalY((RHO_0 / pc_i->getDensity()) * pc_i->getIYY() * (pc_i->getWY() - pc_i->getWOldY())); 
+    //pc_i->setDLInternalZ((RHO_0 / pc_i->getDensity()) * pc_i->getIZZ() * (pc_i->getWZ() - pc_i->getWOldZ())); 
+    pc_i->setDLInternalX(0.0);
+    pc_i->setDLInternalY(0.0);
+    pc_i->setDLInternalZ(0.0);
+
+    #ifdef PARTICLE_DEBUG
+    printf("updateParticleOldValues 2 pos  x: %e y: %e z: %e\n",pc_i->getPosOldX(),pc_i->getPosOldY(),pc_i->getPosOldZ());
+    printf("updateParticleOldValues 3 pos  x: %e y: %e z: %e\n",pc_i->getVelOldX(),pc_i->getVelOldY(),pc_i->getVelOldZ());
+    printf("updateParticleOldValues 4 pos  x: %e y: %e z: %e\n",pc_i->getWOldX(),pc_i->getWOldY(),pc_i->getWOldZ());
+    printf("updateParticleOldValues 5 pos  x: %e y: %e z: %e\n",pc_i->getFOldX(),pc_i->getFOldY(),pc_i->getFOldZ());
+    printf("updateParticleOldValues 6 pos  x: %e y: %e z: %e\n",pc_i->getFX(),pc_i->getFY(),pc_i->getFZ());
+    printf("updateParticleOldValues 7 pos  x: %e y: %e z: %e\n",pc_i->getMX(),pc_i->getMY(),pc_i->getMZ());
+    #endif //PARTICLE_DEBUG
+
+    pc_i->setPos_old(pc_i->getPos());
+    pc_i->setVel_old(pc_i->getVel());
+    pc_i->setW_old(pc_i->getW());
+    pc_i->setF_old(pc_i->getF());
+    pc_i->setM_old(pc_i->getM());
+    pc_i->setF(dfloat3(0,0,0));
+    pc_i->setM(dfloat3(0,0,0));
+
+}
+
+__global__ 
+void updateParticleCenterVelocityAndRotation(
+    ParticleCenter *pArray,
+    unsigned int step)
+{
+    unsigned int localIdx = threadIdx.x + blockDim.x * blockIdx.x;
+    int globalIdx = localIdx;
+
+    if (globalIdx >= NUM_PARTICLES) {
+        return;
+    }
+
+    if (pArray == nullptr) {
+        printf("ERROR: particles is nullptr\n");
+        return;
+    }
+
+    ParticleCenter* pc_i = &pArray[globalIdx];
+
+    if(!pc_i->getMovable())
+        return;
+
+    #ifdef PARTICLE_DEBUG
+    printf("updateParticleCenterVelocityAndRotation 1 pos  x: %e y: %e z: %e\n",pc_i->getPosX(),pc_i->getPosY(),pc_i->getPosZ());
+    printf("updateParticleCenterVelocityAndRotation 1 vel  x: %e y: %e z: %e\n",pc_i->getVel().x,pc_i->getVel().y,pc_i->getVel().z);
+    printf("updateParticleCenterVelocityAndRotation 1 w  x: %e y: %e z: %e\n",pc_i->getWX(),pc_i->getWY(),pc_i->getWZ());
+    printf("updateParticleCenterVelocityAndRotation 1 f  x: %e y: %e z: %e\n",pc_i->getF().x,pc_i->getF().y,pc_i->getF().z);
+    printf("updateParticleCenterVelocityAndRotation 1 m  x: %e y: %e z: %e\n",pc_i->getMX(),pc_i->getMY(),pc_i->getMZ());
+    printf("updateParticleCenterVelocityAndRotation 1 DP  x: %e y: %e z: %e\n",pc_i->getDP_internal().x,pc_i->getDP_internal().y,pc_i->getDP_internal().z);
+    printf("updateParticleCenterVelocityAndRotation 1 pos_old  x: %e y: %e z: %e\n",pc_i->getPosOldX(),pc_i->getPosOldY(),pc_i->getPosOldZ());
+    printf("updateParticleCenterVelocityAndRotation 1 vel_old  x: %e y: %e z: %e\n",pc_i->getVelOldX(),pc_i->getVelOldY(),pc_i->getVelOldZ());
+    printf("updateParticleCenterVelocityAndRotation 1 w_old  x: %e y: %e z: %e\n",pc_i->getWOldX(),pc_i->getWOldY(),pc_i->getWOldZ());
+    printf("updateParticleCenterVelocityAndRotation 1 f_old  x: %e y: %e z: %e\n",pc_i->getFOldX(),pc_i->getFOldY(),pc_i->getFOldZ());
+    printf("updateParticleCenterVelocityAndRotation 1 m_old  x: %e y: %e z: %e\n",pc_i->getMOldX(),pc_i->getMOldY(),pc_i->getMOldZ());
+    printf("updateParticleCenterVelocityAndRotation 1 volume %e\n",pc_i->getVolume());
+    printf("updateParticleCenterVelocityAndRotation 1 density %e\n",pc_i->getDensity());
+    #endif //PARTICLE_DEBUG
+
+    // Update particle center velocity using its surface forces and the body forces
+    dfloat3 g = {GX,GY,GZ};
+    dfloat volume = pc_i->getVolume();
+    const dfloat inv_volume = 1 / volume;
+    pc_i->setVel(pc_i->getVel_old() + (((pc_i->getF_old() + pc_i->getF())/2 + pc_i->getDP_internal())*inv_volume
+                + (pc_i->getDensity() - FLUID_DENSITY)*g) / (pc_i->getDensity()));
+    //pc_i->setVel(pc_i->getVel_old() + (((pc_i->getF_old() + pc_i->getF())/2 + pc_i->getDP_internal())) / (pc_i->getVolume()) 
+    //            + (1.0 - FLUID_DENSITY/pc_i->getDensity()) * g);
+
+
+    // Update particle angular velocity  
+
+    dfloat6 I = pc_i->getI();
+    dfloat I_det = I.zz*I.xy*I.xy + I.yy*I.xz*I.xz + I.xx*I.yz*I.yz - I.xx*I.yy*I.zz - 2*I.xy*I.xz*I.yz;
+    if (!isfinite(I_det) || fabs(I_det) < 1e-15) {
+        printf("ERROR: Invalid inertia determinant %e at step %u\n", I_det, step);
+        return;
+    }
+    dfloat inv_I_det_neg = 1.0/I_det;
+    dfloat3 wAux = pc_i->getW_old();
+    dfloat3 wAvg = (pc_i->getW_old() + pc_i->getW())/2;
+    dfloat3 LM_avg = pc_i->getDL_internal() + (pc_i->getM_old() + pc_i->getM())/2;
+
+    dfloat error = 1.0;
+    dfloat3 wNew;
+    dfloat4 q_rot;
+    dfloat6 Iaux6;
+
+    //for (int i = 0; error > 1e-4; i++)
+    {
+        wNew.x = pc_i->getWOldX() + ((I.yz*I.yz - I.yy*I.zz)*(LM_avg.x + (wAvg.z)*(I.xy*wAvg.x + I.yy*wAvg.y + I.yz*wAvg.z) - (wAvg.y)*(I.xz*wAvg.x + I.yz*wAvg.y + I.zz*wAvg.z))
+                                   - (I.xy*I.yz - I.xz*I.yy)*(LM_avg.z + (wAvg.y)*(I.xx*wAvg.x + I.xy*wAvg.y + I.xz*wAvg.z) - (wAvg.x)*(I.xy*wAvg.x + I.yy*wAvg.y + I.yz*wAvg.z))
+                                   - (I.xz*I.yz - I.xy*I.zz)*(LM_avg.y + (wAvg.x)*(I.xz*wAvg.x + I.yz*wAvg.y + I.zz*wAvg.z) - (wAvg.z)*(I.xx*wAvg.x + I.xy*wAvg.y + I.xz*wAvg.z)))*inv_I_det_neg;
+        wNew.y = pc_i->getWOldY() + ((I.xz*I.xz - I.xx*I.zz)*(LM_avg.y + (wAvg.x)*(I.xz*wAvg.x + I.yz*wAvg.y + I.zz*wAvg.z) - (wAvg.z)*(I.xx*wAvg.x + I.xy*wAvg.y + I.xz*wAvg.z))
+                                   - (I.xy*I.xz - I.xx*I.yz)*(LM_avg.z + (wAvg.y)*(I.xx*wAvg.x + I.xy*wAvg.y + I.xz*wAvg.z) - (wAvg.x)*(I.xy*wAvg.x + I.yy*wAvg.y + I.yz*wAvg.z))
+                                   - (I.xz*I.yz - I.xy*I.zz)*(LM_avg.x + (wAvg.z)*(I.xy*wAvg.x + I.yy*wAvg.y + I.yz*wAvg.z) - (wAvg.y)*(I.xz*wAvg.x + I.yz*wAvg.y + I.zz*wAvg.z)))*inv_I_det_neg;
+        wNew.z = pc_i->getWOldZ() + ((I.xy*I.xy - I.xx*I.yy)*(LM_avg.z + (wAvg.y)*(I.xx*wAvg.x + I.xy*wAvg.y + I.xz*wAvg.z) - (wAvg.x)*(I.xy*wAvg.x + I.yy*wAvg.y + I.yz*wAvg.z))
+                                   - (I.xy*I.xz - I.xx*I.yz)*(LM_avg.y + (wAvg.x)*(I.xz*wAvg.x + I.yz*wAvg.y + I.zz*wAvg.z) - (wAvg.z)*(I.xx*wAvg.x + I.xy*wAvg.y + I.xz*wAvg.z))
+                                   - (I.xy*I.yz - I.xz*I.yy)*(LM_avg.x + (wAvg.z)*(I.xy*wAvg.x + I.yy*wAvg.y + I.yz*wAvg.z) - (wAvg.y)*(I.xz*wAvg.x + I.yz*wAvg.y + I.zz*wAvg.z)))*inv_I_det_neg;
+
+
+        wAvg = (wAux + pc_i->getW_old())/2;
+        //calculate rotation quartention
+        q_rot = axis_angle_to_quart(wAvg,vector_length(wAvg));
+        //compute new moment of inertia       
+        Iaux6 = rotate_inertia_by_quart(q_rot,I);
+
+        error =  (Iaux6.xx-I.xx)*(Iaux6.xx-I.xx)/(Iaux6.xx*Iaux6.xx);
+        error += (Iaux6.yy-I.yy)*(Iaux6.yy-I.yy)/(Iaux6.yy*Iaux6.yy);
+        error += (Iaux6.zz-I.zz)*(Iaux6.zz-I.zz)/(Iaux6.zz*Iaux6.zz);
+        error += (Iaux6.xy-I.xy)*(Iaux6.xy-I.xy)/(Iaux6.xy*Iaux6.xy);
+        error += (Iaux6.xz-I.xz)*(Iaux6.xz-I.xz)/(Iaux6.xz*Iaux6.xz);
+        error += (Iaux6.yz-I.yz)*(Iaux6.yz-I.yz)/(Iaux6.yz*Iaux6.yz);
+        
+        wAux.x = wNew.x;
+        wAux.y = wNew.y;
+        wAux.z = wNew.z;
+
+        I.xx = Iaux6.xx;
+        I.yy = Iaux6.yy;
+        I.zz = Iaux6.zz;
+        I.xy = Iaux6.xy;
+        I.xz = Iaux6.xz;
+        I.yz = Iaux6.yz;                     
+    }
+
+    // Store new velocities in particle center
+    pc_i->setWX(wNew.x);
+    pc_i->setWY(wNew.y);
+    pc_i->setWZ(wNew.z);
+
+    pc_i->setIXX(Iaux6.xx);
+    pc_i->setIYY(Iaux6.yy);
+    pc_i->setIZZ(Iaux6.zz);
+    pc_i->setIXY(Iaux6.xy);
+    pc_i->setIXZ(Iaux6.xz);
+    pc_i->setIYZ(Iaux6.yz);
+
+    #ifdef PARTICLE_DEBUG
+    printf("updateParticleCenterVelocityAndRotation 2 pos  x: %e y: %e z: %e\n",pc_i->getPosX(),pc_i->getPosY(),pc_i->getPosZ());
+    printf("updateParticleCenterVelocityAndRotation 2 vel  x: %e y: %e z: %e\n",pc_i->getVel().x,pc_i->getVel().y,pc_i->getVel().z);
+    printf("updateParticleCenterVelocityAndRotation 2 w  x: %e y: %e z: %e\n",pc_i->getWX(),pc_i->getWY(),pc_i->getWZ());
+    #endif //PARTICLE_DEBUG
+}
+
+__global__
+void updateParticlePosition(
+    ParticleCenter *pArray,
+    unsigned int step)
+{
+    unsigned int localIdx = threadIdx.x + blockDim.x * blockIdx.x;
+    int globalIdx = localIdx;
+
+    if (globalIdx >= NUM_PARTICLES) {
+        return;
+    }
+
+    if (pArray == nullptr) {
+        printf("ERROR: particles is nullptr\n");
+        return;
+    }
+
+    ParticleCenter* pc_i = &pArray[globalIdx];
+
+    if(!pc_i->getMovable())
+        return;
+
+    #ifdef PARTICLE_DEBUG
+    printf("updateParticlePosition 1 pos  x: %e y: %e z: %e\n",pc_i->getPosX(),pc_i->getPosY(),pc_i->getPosZ());
+    printf("updateParticlePosition 1 vel  x: %e y: %e z: %e\n",pc_i->getVel().x,pc_i->getVel().y,pc_i->getVel().z);
+    printf("updateParticlePosition 1 w  x: %e y: %e z: %e\n",pc_i->getWX(),pc_i->getWY(),pc_i->getWZ());
+    #endif //PARTICLE_DEBUG
+
+    #ifdef BC_X_WALL
+        pc_i->setPosX(pc_i->getPosX() + (pc_i->getVelX() + pc_i->getVelOldX())/2);
+    #endif //BC_X_WALL
+    #ifdef BC_X_PERIODIC
+        dfloat dx  = (pc_i->getVelX() + pc_i->getVelOldX())/2;
+        dfloat new_x = pc_i->getPosX() + dx;
+        dfloat mod_x = std::fmod(new_x, (dfloat)NX);
+        pc_i->setPosX((mod_x < 0) ? mod_x + (dfloat)NX : mod_x);
+    #endif //BC_X_PERIODIC
+
+    #ifdef BC_Y_WALL
+        pc_i->setPosY(pc_i->getPosY() + (pc_i->getVelY() + pc_i->getVelOldY())/2);
+    #endif //BC_Y_WALL
+    #ifdef BC_Y_PERIODIC
+        dfloat dy  = (pc_i->getVelY() + pc_i->getVelOldY())/2;
+        dfloat new_y = pc_i->getPosY() + dy;
+        dfloat mod_y = std::fmod(new_y, (dfloat)NY);
+        pc_i->setPosY((mod_y < 0) ? mod_y + (dfloat)NY : mod_y);
+    #endif //BC_Y_PERIODIC
+
+    #ifdef BC_Z_WALL
+        pc_i->setPosZ(pc_i->getPosZ() + (pc_i->getVelZ() + pc_i->getVelOldZ())/2);
+    #endif //BC_Z_WALL
+    #ifdef BC_Z_PERIODIC
+        dfloat dz  = (pc_i->getVelZ() + pc_i->getVelOldZ())/2;
+        dfloat new_z = pc_i->getPosZ() + dz;
+        dfloat mod_z = std::fmod(new_z, (dfloat)NZ_TOTAL);
+        pc_i->setPosZ((mod_z < 0) ? mod_z + (dfloat)NZ_TOTAL : mod_z);
+    #endif //BC_Z_PERIODIC
+
+    //Compute angular velocity
+    pc_i->setW_avg((pc_i->getW() + pc_i->getW_old())/2);
+
+    //update angular position
+    pc_i->setW_pos(pc_i->getW_pos() + pc_i->getW_avg());
+
+    #ifdef PARTICLE_DEBUG
+    printf("updateParticlePosition 2 pos  x: %e y: %e z: %e\n",pc_i->getPosX(),pc_i->getPosY(),pc_i->getPosZ());
+    printf("updateParticlePosition 2 vel  x: %e y: %e z: %e\n",pc_i->getVel().x,pc_i->getVel().y,pc_i->getVel().z);
+    printf("updateParticlePosition 2 w  x: %e y: %e z: %e\n",pc_i->getWX(),pc_i->getWY(),pc_i->getWZ());
+    #endif //PARTICLE_DEBUG
+
+
+    const dfloat w_norm = sqrt((pc_i->getWAvgX() * pc_i->getWAvgX()) 
+                             + (pc_i->getWAvgY() * pc_i->getWAvgY()) 
+                             + (pc_i->getWAvgZ() * pc_i->getWAvgZ()));
+    dfloat3 axis = {0,0,0};
+    if (w_norm > 1e-8) {
+        axis.x = pc_i->getWAvgX() / w_norm;
+        axis.y = pc_i->getWAvgY() / w_norm;
+        axis.z = pc_i->getWAvgZ() / w_norm;
+    }
+    dfloat angle = w_norm;
+    dfloat4 q = axis_angle_to_quart(axis, angle);
+    
+    dfloat4 q_cumulative = pc_i->getQ_cumulative_rot();
+    q_cumulative = quart_multiplication(q, q_cumulative);
+    q_cumulative = quart_normalize(q_cumulative);
+
+    
+    // Store updated cumulative rotation back to particle center
+    pc_i->setQ_cumulative_rot(q_cumulative);
+    
+    dfloat3 pos_old = pc_i->getPos_old();
+
+    dfloat3 pos_new = pc_i->getPos();
+
+    pc_i->setDx(pos_new - pos_old);
+
+    // Update semi-axes using cumulative rotation and original offsets
+    // This avoids error accumulation from incremental updates
+    pc_i->setSemiAxis1(updateSemiAxis(pc_i->getSemiAxis1Original(), pos_new, q_cumulative));
+    pc_i->setSemiAxis2(updateSemiAxis(pc_i->getSemiAxis2Original(), pos_new, q_cumulative));
+    pc_i->setSemiAxis3(updateSemiAxis(pc_i->getSemiAxis3Original(), pos_new, q_cumulative));
+}
+
+
+__host__ __device__
+dfloat3 updateSemiAxis(
+    const dfloat3 semi_offset_original,
+    const dfloat3 particle_center,
+    const dfloat4 q_cumulative
+){
+    const dfloat3 rotated_offset = rotate_vector_by_quart_R(semi_offset_original, q_cumulative);
+    dfloat3 newSemi = {
+        particle_center.x + rotated_offset.x,
+        particle_center.y + rotated_offset.y,
+        particle_center.z + rotated_offset.z
+    };
+
+    return newSemi;
+}
+
+#endif //PARTICLE_MODEL

@@ -1,0 +1,154 @@
+/**
+ *  @file lbmInitialization.h
+ *  Contributors history:
+ *  @author Waine Jr. (waine@alunos.utfpr.edu.br)
+ *  @author Marco Aurelio Ferrari (e.marcoferrari@utfpr.edu.br)
+ *  @brief Variable Initialization
+ *  @version 0.4.0
+ *  @date 01/09/2025
+ */
+
+
+#ifndef __LBM_INITIALIZATION_CUH
+#define __LBM_INITIALIZATION_CUH
+
+#include <string>
+#include <math.h>
+#include <cuda.h>
+#include <curand.h>
+#include <cuda_runtime.h>
+#include <builtin_types.h>
+#include "globalFunctions.h"
+#include "errorDef.h"
+#include "var.h"
+#include "nodeTypeMap.h"
+
+#include <iostream>
+#include <fstream>
+#include <sstream>
+#include <string>
+
+/**
+ *  @brief Initializes random numbers (useful to initialize turbulence)
+ *  @param randomNumbers: vector of random numbers (size is NX*NY*NZ)
+ *  @param seed: seed to use for generation
+ */
+__host__
+void initializationRandomNumbers(
+    dfloat* randomNumbers, 
+    int seed
+);
+
+/**
+ *  @brief Initializes moments with equilibrium population, with density and velocity defined in the function itself  
+ *  @param fMom: Pointer to the device array containing the current macroscopic moments.
+ * @param randomNumbers: vector of random numbers (size is NX*NY*NZ)
+ */
+__global__ void gpuInitialization_mom(
+    dfloat *fMom, dfloat* randomNumbers);
+
+/**
+ *  @brief Initializes populations in the intefaces based on the moments defined in the gpuInitialization_mom       
+ *  @param fMom: Pointer to the device array containing the current macroscopic moments.
+ *  @param ghostInterface interface block transfer information
+ */
+__global__ void gpuInitialization_pop(
+    dfloat *fMom,  ghostInterfaceData ghostInterface);
+
+/**
+ *  @brief Initialize the boundary condition node type
+ *  @param nodeType: node type ID
+ */
+__global__ void gpuInitialization_nodeType(
+    unsigned int *dNodeType);
+
+/**
+ *  @brief Initialize the boundary condition node type
+ *  @param nodeType: node type ID
+ */
+__host__ void hostInitialization_nodeType_bulk(
+    unsigned int *hNodeType);
+
+
+/**
+ *  @brief Initialize the boundary condition node type
+ *  @param nodeType: node type ID
+ */
+__host__ void hostInitialization_nodeType(
+    unsigned int *hNodeType
+    #ifdef CURVED_BOUNDARY_CONDITION
+    , unsigned int* numberCurvedBoundaryNodes
+    #endif
+ );
+
+
+/**
+ *  @brief Initialize the local forces
+ *  @param d_L_Fx: local force in the x direction
+ *  @param d_L_Fy: local force in the y direction
+ *  @param d_L_Fz: local force in the z direction
+ */
+__global__ void gpuInitialization_force(
+    dfloat *d_BC_Fx, dfloat* d_BC_Fy, dfloat* d_BC_Fz);   
+
+/**
+ *  @brief Initializes boundary conditions based on csv with voxels coordinates
+ *  @param filename: csv filename
+ *  @param dNodeType: nodeType arrary
+ */
+__host__ void read_xyz_file(
+    const std::string& filename, 
+    unsigned int *dNodeType);
+
+
+/**
+ *  @brief determines if the lattice is fluid or solid, calls bc_id to define the bc id;
+ *  @param dNodeType: nodeType arrary\
+ */
+__global__ void define_voxel_bc(unsigned int *dNodeType);
+
+
+/**
+  *  @brief defines the bc id based on the neighboring lattices;
+  *  @param dNodeType: nodeType arrary
+  *  @param x: x coordinate of the lattice
+  *  @param y: y coordinate of the lattice
+  *  @param y: z coordinate of the lattice
+  */
+__host__ __device__
+unsigned int bc_id(unsigned int *dNodeType, int x,int y,int z);
+
+#ifdef CURVED_BOUNDARY_CONDITION
+    /**
+     * @brief Get the Number of Curved Boundary Nodes object
+     * @param hNodeType: host node type array
+     * @return unsigned int: number of curved boundary nodes
+     */
+    unsigned int getNumberCurvedBoundaryNodes(unsigned int *&hNodeType);
+    /**
+     * @brief Allocate device memory for curved boundary condition structures
+     * @param d_curvedBC: device pointer to array of pointers to CurvedBoundary structures
+     * @param d_curvedBC_array: device pointer to contiguous array of CurvedBoundary structures
+     * @param numberCurvedBoundaryNodes: number of curved boundary nodes
+     */
+    void allocateDeviceMemoryCurvedBoundary(CurvedBoundary** &d_curvedBC, CurvedBoundary* &d_curvedBC_array, unsigned int numberCurvedBoundaryNodes);
+    /**
+     * @brief Initialize curved boundary condition structures on device
+     * @param hNodeType: host node type array  
+     * @param dNodeType: device node type array
+     * @param d_curvedBC: device pointer to array of pointers to CurvedBoundary structures
+     * @param d_curvedBC_array: device pointer to contiguous array of CurvedBoundary structures
+     * @param numberCurvedBoundaryNodes: number of curved boundary nodes
+     */
+    void initializeCurvedBoundaryArray(unsigned int *&hNodeType, unsigned int *&dNodeType, CurvedBoundary** &d_curvedBC, CurvedBoundary* &d_curvedBC_array, unsigned int numberCurvedBoundaryNodes);
+    /**
+     * @brief Initialize curved boundary condition device field
+     * @param hNodeType: host node type array
+     * @param dNodeType: device node type array
+     * @param d_curvedBC: device pointer to array of pointers to CurvedBoundary structures
+     * @param d_curvedBC_array: device pointer to contiguous array of CurvedBoundary structures
+     */
+    void initializeCurvedBoundaryDeviceField(unsigned int *&hNodeType, unsigned int *&dNodeType, CurvedBoundary** &d_curvedBC, CurvedBoundary* &d_curvedBC_array);
+#endif //CURVED_BOUNDARY_CONDITION
+
+#endif // !__LBM_INITIALIZATION_CUH
